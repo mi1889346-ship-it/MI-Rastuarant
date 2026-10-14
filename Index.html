@@ -1,0 +1,498 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restaurant Excel Management</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial;background:#f1f4f8;color:#172033}
+header{background:#173b32;color:white;padding:20px;text-align:center}
+header h2{margin:0 0 8px}
+header p{margin:0;color:#d6e8df}
+nav{display:flex;gap:7px;overflow-x:auto;padding:12px;background:#fff;position:sticky;top:0;z-index:5}
+nav button{white-space:nowrap;width:auto;background:#e6eee9;color:#173b32;padding:11px 15px}
+nav button.active{background:#176548;color:white}
+.container{padding:16px;max-width:1400px;margin:auto}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:15px 0}
+.card,.panel{background:white;padding:17px;border-radius:10px;border:1px solid #e0e6ec;margin-bottom:15px}
+.card p{font-size:13px;color:#687385;margin:0 0 12px}
+.card h3{margin:0;font-size:21px;overflow-wrap:anywhere}
+h3{margin-top:0}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+label{display:block;font-size:13px;font-weight:bold;margin-bottom:6px}
+input,select,button{padding:11px;border:1px solid #d3dce5;border-radius:6px;font-size:14px;width:100%}
+button{cursor:pointer;background:#176548;color:white;border:none;font-weight:bold}
+button:hover{opacity:.88}
+nav button{width:auto}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.actions button{width:auto}
+.secondary{background:#334155}
+.danger{background:#c53030}
+.tablebox{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px;background:white}
+th,td{padding:11px;text-align:left;border-bottom:1px solid #e5eaf0;font-size:13px}
+th{background:#e6eee9}
+.empty{text-align:center;color:#777;padding:24px}
+.note{font-size:13px;color:#667085;line-height:1.6}
+.hidden{display:none}
+@media(max-width:600px){.container{padding:9px}.panel,.card{padding:12px}}
+@media print{nav,form,.actions,.deletecol,header p{display:none!important}.container{padding:0}}
+</style>
+</head>
+<body>
+
+<header>
+<h2>MI Ratuarant Karachi</h2>
+<p>Spcieal Food Offer | Speciel Customers</p>
+</header>
+
+<nav id="tabs"></nav>
+
+<div class="container">
+
+<section id="dashboard" class="page">
+<h3>Dashboard</h3>
+<p class="note">All Types Total Counting.</p>
+<div class="cards">
+<div class="card"><p>Total Sales</p><h3 id="dSales">Rs 0</h3></div>
+<div class="card"><p>Cash Received</p><h3 id="dCash">Rs 0</h3></div>
+<div class="card"><p>Outstanding Loans</p><h3 id="dLoans">Rs 0</h3></div>
+<div class="card"><p>Food Costs</p><h3 id="dFood">Rs 0</h3></div>
+<div class="card"><p>Worker Salaries</p><h3 id="dSalary">Rs 0</h3></div>
+<div class="card"><p>Other Expenses</p><h3 id="dExpenses">Rs 0</h3></div>
+<div class="card"><p>Gross Profit</p><h3 id="dGross">Rs 0</h3></div>
+<div class="card"><p>Net Profit</p><h3 id="dNet">Rs 0</h3></div>
+</div>
+<div class="panel">
+<h3>Accounting Summary</h3>
+<div class="tablebox">
+<table><thead><tr><th>Account</th><th>Amount</th></tr></thead>
+<tbody id="summary"></tbody></table>
+</div>
+</div>
+<div class="panel">
+<h3>Monthly Report</h3>
+<label for="month">Select Month</label>
+<input type="month" id="month">
+<div class="cards">
+<div class="card"><p>Monthly Sales</p><h3 id="mSales">Rs 0</h3></div>
+<div class="card"><p>Monthly Costs</p><h3 id="mCosts">Rs 0</h3></div>
+<div class="card"><p>Monthly Net Profit</p><h3 id="mNet">Rs 0</h3></div>
+</div>
+</div>
+</section>
+
+<section id="sheet" class="page hidden">
+<div class="panel">
+<h3 id="sheetTitle">Sheet</h3>
+<p class="note" id="sheetDescription"></p>
+<form id="entryForm"></form>
+<div class="actions">
+<button id="exportSheet" type="button" class="secondary">Export This Sheet to CSV</button>
+<button id="printSheet" type="button" class="secondary">Print</button>
+</div>
+</div>
+<div class="panel">
+<h3 id="tableTitle">Records</h3>
+<div class="tablebox">
+<table><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
+</div>
+<p class="note" id="count"></p>
+</div>
+</section>
+
+<section class="panel">
+<h3>Backup & Restore</h3>
+<p class="note">Download a full JSON backup regularly. Records are saved only in this browser on this device.</p>
+<div class="actions">
+<button id="backup" type="button" class="secondary">Download All Data</button>
+<button id="restore" type="button" class="secondary">Restore Backup</button>
+<input type="file" id="file" accept=".json,application/json" class="hidden">
+<button id="clear" type="button" class="danger">Delete All Data</button>
+</div>
+</section>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+};
+const monthNow = today().slice(0,7);
+
+const sheets = {
+ food:{
+  title:"Food Costs Sheet",
+  desc:"Enter ingredient purchases, cooking oil, meat, vegetables and other food preparation costs.",
+  fields:[
+   ["date","Date","date"],["item","Food / Ingredient","text"],
+   ["qty","Quantity","number"],["unit","Unit / Notes","text"],
+   ["amount","Total Cost (Rs)","number"]
+  ]
+ },
+ sales:{
+  title:"Customer Sales Sheet",
+  desc:"Enter each customer bill. Unpaid balances are automatically transferred to the Loans Sheet.",
+  fields:[
+   ["date","Date","date"],["customer","Customer Name","text"],
+   ["item","Items / Order Details","text"],["amount","Total Bill (Rs)","number"],
+   ["cash","Cash Received (Rs)","number"]
+  ]
+ },
+ loans:{
+  title:"Customer Loans Sheet",
+  desc:"Sales credit appears here automatically. Use Loan Payment to record repayments against the same customer or company.",
+  fields:[
+   ["date","Date","date"],["customer","Customer / Company","text"],
+   ["kind","Transaction","select",["Loan","Loan Payment"]],
+   ["amount","Amount (Rs)","number"],["note","Details","text"]
+  ]
+ },
+ salaries:{
+  title:"Worker Salaries Sheet",
+  desc:"Record each worker's daily wages. Enter each day's salary separately.",
+  fields:[
+   ["date","Date","date"],["worker","Worker Name","text"],
+   ["days","Days / Shifts","number"],["amount","Salary (Rs)","number"]
+  ]
+ },
+ expenses:{
+  title:"Other Expenses Sheet",
+  desc:"Record rent, electricity, gas, transport, repairs and other expenses.",
+  fields:[
+   ["date","Date","date"],["item","Expense Description","text"],
+   ["category","Category","select",["Rent","Electricity","Gas","Transport","Repairs","Water","Other"]],
+   ["amount","Amount (Rs)","number"]
+  ]
+ }
+};
+
+let db = {food:[],sales:[],loans:[],salaries:[],expenses:[]};
+let active = "dashboard";
+
+try{
+ const saved = localStorage.getItem("restaurantExcelV1");
+ if(saved){
+  const parsed = JSON.parse(saved);
+  Object.keys(db).forEach(k=>{
+   if(Array.isArray(parsed[k])) db[k]=parsed[k];
+  });
+ }
+}catch(e){}
+
+function save(){
+ try{
+  localStorage.setItem("restaurantExcelV1",JSON.stringify(db));
+ }catch(e){
+  alert("Storage is full or unavailable. Download a backup.");
+ }
+}
+
+function money(v){
+ return "Rs "+Number(v||0).toLocaleString("en-PK",{
+  minimumFractionDigits:2,maximumFractionDigits:2
+ });
+}
+function val(v){return Number(v)||0}
+function total(rows){return rows.reduce((s,r)=>s+val(r.amount),0)}
+
+function addTabs(){
+ const tabs = [
+  ["dashboard","Dashboard"],["food","Food Costs"],
+  ["sales","Customer Sales"],["loans","Customer Loans"],
+  ["salaries","Worker Salaries"],["expenses","Other Expenses"]
+ ];
+ $("tabs").innerHTML="";
+ tabs.forEach(([id,label])=>{
+  const b=document.createElement("button");
+  b.textContent=label;
+  b.className=id===active?"active":"";
+  b.onclick=()=>openSheet(id);
+  $("tabs").appendChild(b);
+ });
+}
+
+function openSheet(id){
+ active=id;
+ addTabs();
+ $("dashboard").classList.toggle("hidden",id!=="dashboard");
+ $("sheet").classList.toggle("hidden",id==="dashboard");
+ if(id!=="dashboard") renderSheet();
+ renderDashboard();
+}
+
+function createInput(field){
+ const [key,label,type,options]=field;
+ const wrap=document.createElement("div");
+ const lab=document.createElement("label");
+ lab.textContent=label;
+ lab.htmlFor="f_"+key;
+ const el=document.createElement(type==="select"?"select":"input");
+ el.id="f_"+key;
+ el.name=key;
+ if(type!=="select") el.type=type;
+ if(type==="date") el.value=today();
+ if(type==="number"){
+  el.min="0";
+  el.step="0.01";
+  el.placeholder="0";
+ }
+ if(type==="select"){
+  options.forEach(o=>{
+   const opt=document.createElement("option");
+   opt.value=o;opt.textContent=o;el.appendChild(opt);
+  });
+ }
+ wrap.append(lab,el);
+ return wrap;
+}
+
+function renderSheet(){
+ const s=sheets[active];
+ $("sheetTitle").textContent=s.title;
+ $("tableTitle").textContent=s.title+" — All Records";
+ $("sheetDescription").textContent=s.desc;
+ const form=$("entryForm");
+ form.innerHTML="";
+ s.fields.forEach(f=>form.appendChild(createInput(f)));
+
+ const submit=document.createElement("button");
+ submit.type="submit";
+ submit.textContent="+ Add Record";
+ form.appendChild(submit);
+
+ form.onsubmit=e=>{
+  e.preventDefault();
+  const record={id:uid()};
+  s.fields.forEach(([key,label,type])=>{
+   const el=$("f_"+key);
+   record[key]=type==="number"?val(el.value):el.value.trim();
+  });
+
+  const amount=val(record.amount);
+  if(!record.date||amount<=0){
+   alert("Enter a date and an amount greater than zero.");
+   return;
+  }
+
+  if(active==="sales"){
+   if(record.cash<0||record.cash>record.amount){
+    alert("Cash received must be between zero and the total bill.");
+    return;
+   }
+   if(record.cash<record.amount){
+    db.loans.push({
+     id:uid(),date:record.date,customer:record.customer,
+     kind:"Loan",amount:record.amount-record.cash,
+     note:"Credit from sale: "+record.item,
+     saleId:record.id
+    });
+   }
+  }
+
+  if(active==="loans"){
+   if(!record.customer){
+    alert("Enter a customer or company name.");
+    return;
+   }
+   if(record.kind==="Loan Payment"){
+    const outstanding=loanBalance(record.customer,record.date);
+    if(amount>outstanding){
+     alert("Payment is greater than the outstanding loan: "+money(outstanding));
+     return;
+    }
+   }
+  }
+
+  db[active].push(record);
+  save();
+  renderSheet();
+  renderDashboard();
+ };
+ renderTable();
+}
+
+function uid(){
+ return Date.now().toString(36)+Math.random().toString(36).slice(2,9);
+}
+
+function loanBalance(customer,through="9999-12-31"){
+ const key=customer.trim().toLowerCase();
+ return Math.max(0,db.loans
+  .filter(r=>r.customer.trim().toLowerCase()===key&&r.date<=through)
+  .reduce((sum,r)=>sum+(r.kind==="Loan"?val(r.amount):-val(r.amount)),0));
+}
+
+function renderTable(){
+ const s=sheets[active];
+ $("tableHead").innerHTML="";
+ const tr=document.createElement("tr");
+ s.fields.forEach(([key,label])=>{
+  const th=document.createElement("th");th.textContent=label;tr.appendChild(th);
+ });
+ const th=document.createElement("th");
+ th.textContent="Action";th.className="deletecol";tr.appendChild(th);
+ $("tableHead").appendChild(tr);
+ $("tableBody").innerHTML="";
+
+ const records=[...db[active]].reverse();
+ if(!records.length){
+  $("tableBody").innerHTML=`<tr><td colspan="${s.fields.length+1}" class="empty">No records yet. Add your first record above.</td></tr>`;
+ }
+ records.forEach(r=>{
+  const row=document.createElement("tr");
+  s.fields.forEach(([key,label,type])=>{
+   const td=document.createElement("td");
+   td.textContent=type==="number"?
+    (key==="qty"||key==="days"?String(r[key]??0):money(r[key])):
+    (r[key]??"");
+   row.appendChild(td);
+  });
+  const td=document.createElement("td");
+  td.className="deletecol";
+  const b=document.createElement("button");
+  b.className="danger";b.style.width="auto";b.textContent="Delete";
+  b.onclick=()=>{
+   if(!confirm("Delete this record?"))return;
+   if(active==="sales"){
+    db.loans=db.loans.filter(l=>l.saleId!==r.id);
+   }
+   db[active]=db[active].filter(x=>x.id!==r.id);
+   save();renderSheet();renderDashboard();
+  };
+  td.appendChild(b);row.appendChild(td);
+  $("tableBody").appendChild(row);
+ });
+ $("count").textContent="Total records: "+records.length;
+}
+
+function calc(rows){
+ const sales=total(rows.sales);
+ const cash=rows.sales.reduce((s,r)=>s+val(r.cash),0);
+ const food=total(rows.food);
+ const salary=total(rows.salaries);
+ const expenses=total(rows.expenses);
+ const gross=sales-food;
+ const net=gross-salary-expenses;
+ const loans=rows.loans.reduce((s,r)=>
+  s+(r.kind==="Loan"?val(r.amount):-val(r.amount)),0);
+ const payments=rows.loans.filter(r=>r.kind==="Loan Payment")
+  .reduce((s,r)=>s+val(r.amount),0);
+ return {sales,cash,food,salary,expenses,gross,net,loans:Math.max(0,loans),payments};
+}
+
+function renderDashboard(){
+ const t=calc(db);
+ const values={
+  dSales:t.sales,dCash:t.cash,dLoans:t.loans,
+  dFood:t.food,dSalary:t.salary,dExpenses:t.expenses,
+  dGross:t.gross,dNet:t.net
+ };
+ Object.entries(values).forEach(([id,v])=>$(id).textContent=money(v));
+ $("dNet").style.color=t.net<0?"#c53030":"#16834a";
+ $("dGross").style.color=t.gross<0?"#c53030":"#16834a";
+
+ const rows=[
+  ["Total Sales",t.sales],["Cash Received from Sales",t.cash],
+  ["Food Preparation Costs",t.food],["Gross Profit",t.gross],
+  ["Worker Salaries",t.salary],["Other Expenses",t.expenses],
+  ["Net Profit / Loss",t.net],["Loan Payments Collected",t.payments],
+  ["Outstanding Customer Loans",t.loans]
+ ];
+ $("summary").innerHTML="";
+ rows.forEach(([label,amount])=>{
+  const tr=document.createElement("tr");
+  const a=document.createElement("td"),b=document.createElement("td");
+  a.textContent=label;b.textContent=money(amount);
+  tr.append(a,b);$("summary").appendChild(tr);
+ });
+ renderMonthly();
+}
+
+function renderMonthly(){
+ const m=$("month").value||monthNow;
+ const filtered={};
+ Object.keys(db).forEach(k=>{
+  filtered[k]=db[k].filter(r=>r.date&&r.date.startsWith(m));
+ });
+ const t=calc(filtered);
+ $("mSales").textContent=money(t.sales);
+ $("mCosts").textContent=money(t.food+t.salary+t.expenses);
+ $("mNet").textContent=money(t.net);
+ $("mNet").style.color=t.net<0?"#c53030":"#16834a";
+}
+$("month").value=monthNow;
+$("month").addEventListener("change",renderMonthly);
+
+function csvEscape(v){
+ return '"'+String(v??"").replace(/"/g,'""')+'"';
+}
+function download(filename,content,type){
+ const blob=new Blob([content],{type});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;a.download=filename;a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+$("exportSheet").onclick=()=>{
+ const s=sheets[active];
+ const rows=db[active];
+ const cols=s.fields.map(f=>f[0]);
+ const csv=[
+  s.fields.map(f=>csvEscape(f[1])).join(","),
+  ...rows.map(r=>cols.map(k=>csvEscape(r[k])).join(","))
+ ].join("\r\n");
+ download(active+"-sheet.csv","\uFEFF"+csv,"text/csv;charset=utf-8");
+};
+
+$("printSheet").onclick=()=>window.print();
+
+$("backup").onclick=()=>{
+ download("restaurant-backup.json",JSON.stringify(db,null,2),"application/json");
+};
+$("restore").onclick=()=>$("file").click();
+
+$("file").onchange=async e=>{
+ const file=e.target.files[0];
+ if(!file)return;
+ try{
+  const imported=JSON.parse(await file.text());
+  if(!imported||typeof imported!=="object"||
+    !Object.keys(sheets).every(k=>Array.isArray(imported[k])))
+   throw Error();
+  for(const k of Object.keys(sheets)){
+   for(const r of imported[k]){
+    if(!r||typeof r.date!=="string"||
+      !Number.isFinite(Number(r.amount))||Number(r.amount)<0)
+      throw Error();
+    if(k==="sales"&&(!Number.isFinite(Number(r.cash))||
+      Number(r.cash)<0||Number(r.cash)>Number(r.amount)))throw Error();
+    if(k==="loans"&&!["Loan","Loan Payment"].includes(r.kind))throw Error();
+   }
+  }
+  if(!confirm("Replace all current sheets with this backup?"))return;
+  db={};
+  Object.keys(sheets).forEach(k=>db[k]=imported[k]);
+  save();openSheet(active);renderDashboard();
+  alert("Backup restored successfully.");
+ }catch(err){alert("Invalid or incompatible backup file.");}
+ finally{e.target.value="";}
+};
+
+$("clear").onclick=()=>{
+ if(confirm("Delete all data from every sheet? Export a backup first if needed.")){
+  Object.keys(db).forEach(k=>db[k]=[]);
+  save();openSheet(active);renderDashboard();
+ }
+};
+
+addTabs();
+openSheet("dashboard");
+</script>
+</body>
+</html>
